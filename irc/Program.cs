@@ -14,6 +14,9 @@ namespace irc
             client.OnMotd += msg => {
                 client.Send(IRCMessage.Join("#home"));
             };
+            client.OnJoin += (who, channel) => {
+
+            };
             client.Listen();
         }
     }

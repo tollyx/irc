@@ -13,7 +13,8 @@ namespace irclib {
         public delegate void NickEvent(string from, string to);
         public delegate void PingEvent(string msg);
         public delegate void PongEvent(string msg);
-        public delegate void JoinEvent(string channel);
+        public delegate void JoinEvent(string who, string channel);
+        public delegate void PartEvent(string who, string channel);
         public delegate void PrivMsgEvent(string from, string to, string msg);
         public delegate void UnknownEvent(IRCMessage message);
         public delegate bool InterceptEvent(IRCMessage message);
@@ -32,6 +33,7 @@ namespace irclib {
         public event PingEvent OnPing;
         public event PongEvent OnPong;
         public event JoinEvent OnJoin;
+        public event PartEvent OnPart;
         public event PrivMsgEvent OnMsg;
         public event InterceptEvent Intercept;
         public event UnknownEvent OnUnknown;
@@ -90,24 +92,29 @@ namespace irclib {
 
             switch (msg.Command) {
                 case "PING":
-                    Send(IRCMessage.Pong(msg.Trailing));
-                    OnPing?.Invoke(msg.Trailing);
+                    Send(IRCMessage.Pong(msg.Args[0]));
+                    OnPing?.Invoke(msg.Args[0]);
                     break;
                 case "PONG":
-                    OnPong?.Invoke(msg.Trailing);
+                    OnPong?.Invoke(msg.Args[0]);
                     break;
                 case "422": // MOTD
-                    OnMotd?.Invoke(msg.Trailing);
+                    OnMotd?.Invoke(msg.Args[0]);
+                    break;
+                case "PART":
+                    LogIn($"{msg.Prefix} left {msg.Args[0]}");
+                    OnPart?.Invoke(msg.Prefix, msg.Args[0]);
                     break;
                 case "JOIN":
-                    OnJoin?.Invoke(msg.Params[0]);
+                    LogIn($"{msg.Prefix} joined {msg.Args[0]}");
+                    OnJoin?.Invoke(msg.Prefix, msg.Args[0]);
                     break;
                 case "NICK":
-                    OnNick?.Invoke(msg.Prefix, msg.Params[0]);
+                    OnNick?.Invoke(msg.Prefix, msg.Args[0]);
                     break;
                 case "PRIVMSG":
-                    LogIn($"<{msg.Prefix}> {msg.Trailing}");
-                    OnMsg?.Invoke(msg.Prefix, msg.Params[0], msg.Trailing);
+                    LogIn($"<{msg.Prefix}> {msg.Args[1]}");
+                    OnMsg?.Invoke(msg.Prefix, msg.Args[0], msg.Args[1]);
                     break;
                 default:
                     LogIn("??? " + msg);
@@ -128,7 +135,7 @@ namespace irclib {
         }
 
         public void Send(IRCMessage message) {
-            var buf = Encoding.UTF8.GetBytes($"{message}\r\n".ToArray());
+            var buf = Encoding.UTF8.GetBytes(message.ToString().ToArray());
             if (sendsize + buf.Length < sendbuf.Length) {
                 Flush();
             }
